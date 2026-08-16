@@ -1,52 +1,65 @@
-require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
+require('dotenv').config();
 
 const app = express();
 app.use(express.json());
 
-app.post('/webhook/orders-create', async (req, res) => {
-    try {
-        const order = req.body;
-        console.log(`[COMMANDE RECEVE] ID Shopify: ${order.id}`);
+const PORT = process.env.PORT || 10000;
 
-        const shippingDetails = {
-            orderId: order.id,
-            customerName: `${order.shipping_address.first_name} ${order.shipping_address.last_name}`,
-            address: order.shipping_address.address1,
-            city: order.shipping_address.city,
-            zip: order.shipping_address.zip,
-            country: order.shipping_address.country,
-            phone: order.shipping_address.phone,
-            items: order.line_items.map(item => ({
-                sku: item.sku,
-                title: item.title,
-                quantity: item.quantity
-            }))
-        };
-
-        const supplierResult = await sendToSupplier(shippingDetails);
-
-        if (supplierResult.success) {
-            console.log(`[SUCCÈS] Commande transmise. Tracking: ${supplierResult.trackingId}`);
-            res.status(200).json({ status: "success", tracking: supplierResult.trackingId });
-        } else {
-            res.status(500).json({ status: "error", message: "Échec envoi" });
-        }
-
-    } catch (error) {
-        console.error('[ERREUR WEBHook]:', error.message);
-        res.status(500).send('Erreur interne');
-    }
+// Route de vérification (Santé du serveur)
+app.get('/', (req, res) => {
+  res.status(200).send('Serveur d automatisation actif et opérationnel !');
 });
 
-async function sendToSupplier(orderDetails) {
-    console.log(`Traitement commande pour ${orderDetails.customerName}...`);
-    return {
-        success: true,
-        trackingId: "TRACK-" + Math.floor(100000 + Math.random() * 900000)
-    };
+// 1. RECEPTION DES COMMANDES SHOPIFY
+app.post('/webhook/orders-create', async (req, res) => {
+  try {
+    const order = req.body;
+    console.log(`\n========================================`);
+    console.log(`[SHOPIFY] Nouvelle commande reçue : #${order.order_number || order.id}`);
+    console.log(`Client : ${order.customer ? order.customer.first_name : 'Anonyme'} ${order.customer ? order.customer.last_name : ''}`);
+    console.log(`Total : ${order.total_price} ${order.currency}`);
+
+    // Extraction des articles
+    const lineItems = order.line_items || [];
+    console.log(`Articles commandés (${lineItems.length}) :`);
+    
+    lineItems.forEach(item => {
+      console.log(`- ${item.name} (Qté: ${item.quantity}) - SKU: ${item.sku || 'N/A'}`);
+    });
+
+    // 2. TRANSMISSION AUTOMATIQUE AUX FOURNISSEURS / API
+    await processSupplierAutomation(order);
+
+    res.status(200).send('Webhook reçu et traité avec succès');
+  } catch (error) {
+    console.error('[ERREUR] Échec du traitement de la commande :', error.message);
+    res.status(500).send('Erreur interne du serveur');
+  }
+});
+
+// FUNCTION POUR GERER L AUTOMATISATION FOURNISSEUR (AliExpress, Amazon, etc.)
+async function processSupplierAutomation(orderData) {
+  console.log('[FOURNISSEUR] Lancement du traitement automatique...');
+
+  // Exemple d'envoi vers un service tier ou une API fournisseur
+  /*
+  try {
+    // Ici tu pourras brancher l'API d'AliExpress, Amazon, ou un service comme DSers/Webhook externe
+    // const response = await axios.post('https://api.fournisseur.com/orders', { ... });
+    console.log('[FOURNISSEUR] Commande transmise avec succès au fournisseur.');
+  } catch (err) {
+    console.error('[FOURNISSEUR ERREUR] Impossible d envoyer au fournisseur :', err.message);
+  }
+  */
+  
+  console.log('[FOURNISSEUR] Traitement simulé terminé.');
 }
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Bot actif sur le port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`\n========================================`);
+  console.log(`Serveur d automatisation lancé sur le port ${PORT}`);
+  console.log(`Prêt à écouter les événements Shopify.`);
+  console.log(`========================================\n`);
+});
